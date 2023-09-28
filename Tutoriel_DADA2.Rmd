@@ -7,6 +7,7 @@ git config --global user.email "you@example.com"
 git config --global user.name "Your Name"
 ```
 
+1.
 
 ```{bash, eval=FALSE}
 wget https://github.com/ANF-MetaBioDiv/course-material/archive/refs/heads/main.zip
@@ -68,6 +69,8 @@ if (!file.exists(silva_species_assignment)) {
 
 ```
 
+2.
+
 On fait une nouvelle variable qui donnera le chemin. On crée 2
 nouvelles variables qui vont chacune regrouper les séquences possédant R1 dans l'une et R2 dans l'autre.
  
@@ -117,6 +120,8 @@ On indique à R l'endroit où se trouvent les outils.
 devtools::load_all(path="/home/rstudio/ADM2023_tutoriel/course-material-main/R")
 ```
 
+3.
+
 On crée une variable quality_folder avec le chemin menant aux graphiques. Ainsi, si le fichier n'existe pas, one le fait dans notre répertoire. Par exemple : fichier 1 : la séquence va de 1 à 300 pb. 2000 séquences du S11B sont lues. La ligne rouge est le nombre de read qui ont au moins cette longueur (ici 100% car Illumina fait obligatoirement la même longueur). Score que qualité diminue chez les R1 à la fin. On veut se débarrasser de tout ce qui est moins bien (garder tout en dessous de Q30). A partir de 200nt, on passe en dessous. Il faut toujours garder 20-30 nt de chevauchement pour les aligner.
 
 ```{r}
@@ -132,6 +137,8 @@ qualityprofile(fnFs,
                fnRs,
                file.path(quality_folder, "quality_plots.pdf"))
 ```
+
+4.
 
 On souhaite raccourcir les séquences pour retirer les bases avec le moins bon Qscore. On crée une variable pour diriger R vers les séquences raccourcies. Pareil, si la direction n'existe pas, on crée une direction vers ce fichier.
 
@@ -152,7 +159,7 @@ primer_fwd  <- "CCTACGGGNBGCASCAG"
 primer_rev  <- "GACTACNVGGGTATCTAAT"
 ```
 
-
+On lit les 10 premières et 10 dernières séquences R1 et R2
 
 ```{r}
 Biostrings::readDNAStringSet(
@@ -169,8 +176,16 @@ Biostrings::readDNAStringSet(
 )
 ```
 
+On copie les informations du dossier bash dans un nouveau dossier bash dans le ADM2023_tutoriel.
 
 ```{bash}
+pwd
+cp -R /home/rstudio/ADM2023_tutoriel/course-material-main/bash .
+```
+
+La variable primer_log prend la fonction primer_trim comme objet. forward et reverse correspondent aux séquences directes et complémentaires. primer_fwd et primer_rev correspondent aux amorces. output_dir permet de noter toutes les séquences raccourcies. Les séquences raccourcies doivent faire plus de 200 pb.
+
+```{r}
 (primer_log <- primer_trim(
   forward_files = fnFs,
   reverse_files = fnRs,
@@ -181,4 +196,51 @@ Biostrings::readDNAStringSet(
 ))
 ```
 
+On extrait les séquences raccourcies pour les séquences directes et complémentaires en demandant tous les noms.
+
+```{r}
+nopFw <- sort(list.files(path_to_trimmed_reads, pattern ="R1", full.names = TRUE))
+nopRv <- sort(list.files(path_to_trimmed_reads, pattern ="R2", full.names = TRUE))
+```
+
+5.
+
+```{r}
+path_to_filtered_reads <- here::here("outputs", "dada2", "filtered")
+if (!dir.exists(path_to_filtered_reads)) dir.create(path_to_filtered_reads, recursive = TRUE)
+```
+
+```{r}
+filtFs <- file.path(path_to_filtered_reads, basename(fnFs))
+filtRs <- file.path(path_to_filtered_reads, basename(fnRs))
+```
+
+```{r}
+names(filtFs) <- sample_names
+names(filtRs) <- sample_names
+```
+
+Il faut que chaque R1 ait une séquence R2 associée, sinon elle sera retirée. Il ne faut pas d'ambiguités (argument maxN). Dès qu'on a  --> aide sur le site.
+
+```{r}
+(out <- dada2::filterAndTrim(
+  fwd = nopFw,
+  filt = filtFs,
+  rev = nopRv,
+  filt.rev = filtRs,
+  minLen = 150,
+  matchIDs = TRUE,
+  maxN = 0,
+  maxEE = c(3, 3),
+  truncQ = 2
+))
+```
+
+6.
+
+
+
+```{r}
+
+```
 

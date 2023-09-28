@@ -288,3 +288,4 @@ mergers <- dada2::mergePairs(
 seqtab <- dada2::makeSequenceTable(mergers)
 ```
 
+

@@ -205,6 +205,8 @@ nopRv <- sort(list.files(path_to_trimmed_reads, pattern ="R2", full.names = TRUE
 
 5.
 
+On crée un dossier menant aux séquences filtrées. 
+
 ```{r}
 path_to_filtered_reads <- here::here("outputs", "dada2", "filtered")
 if (!dir.exists(path_to_filtered_reads)) dir.create(path_to_filtered_reads, recursive = TRUE)
@@ -238,9 +240,51 @@ Il faut que chaque R1 ait une séquence R2 associée, sinon elle sera retirée. 
 
 6.
 
+On attribue à un nouvel objet errF et errR la fonction de résolution d'erreurs de dada2, avec comme argument les séquences filtrées tirées aléatoirement parmi toutes les séquences filtrées totales. On applique ensuite la fonction dada2::plotErrors pour faire un graphique des erreurs observées de chaque transition.
+
+```{r}
+errF <- dada2::learnErrors(filtFs,
+                           randomize = TRUE,
+                           multithread = TRUE)
+
+errR <- dada2::learnErrors(filtRs,
+                           randomize = TRUE,
+                           multithread = TRUE)
+dada2::plotErrors(errF, nominalQ=TRUE)
+```
+
+On retire ensuite les séquences lues en double. Pour chaque séquence unique, on compte le nombre de lectures.
+
+```{r}
+derepFs <- dada2::derepFastq(filtFs, verbose = TRUE)
+derepRs <- dada2::derepFastq(filtRs, verbose = TRUE)
+```
+
+Dada2 retire les erreurs et faire correspondre les séquences entre elles. 
+
+```{r}
+dadaFs <- dada2::dada(derepFs, err = errF, multithread = TRUE)
+dadaRs <- dada2::dada(derepRs, err = errR, multithread = TRUE)
+```
+
+7.
 
 
 ```{r}
+mergers <- dada2::mergePairs(
+  dadaF = dadaFs,
+  derepF = derepFs,
+  dadaR = dadaRs,
+  derepR = derepRs,
+  maxMismatch = 0,
+  verbose = TRUE
+)
+```
 
+8.
+
+
+```{r}
+seqtab <- dada2::makeSequenceTable(mergers)
 ```
 

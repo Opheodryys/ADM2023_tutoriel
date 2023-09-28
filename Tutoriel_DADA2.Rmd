@@ -239,7 +239,6 @@ Il faut que chaque R1 ait une séquence R2 associée, sinon elle sera retirée. 
 6.
 
 
-
 ```{r}
 
 ```

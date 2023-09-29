@@ -14,6 +14,7 @@ wget https://github.com/ANF-MetaBioDiv/course-material/archive/refs/heads/main.z
 unzip main.zip
 ```
 
+
 On commence par créer une variable refdb_folder qui crée un fichier. On demande à R de créer un fichier portant ce nom si jamais il n'existe pas. L'argument recursive = TRUE signifie qu'on autorise ce fichier à créer des sous-dossiers
 
 ```{r}

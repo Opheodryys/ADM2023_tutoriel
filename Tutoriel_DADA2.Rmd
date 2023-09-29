@@ -267,7 +267,7 @@ dadaFs <- dada2::dada(derepFs, err = errF, multithread = TRUE)
 dadaRs <- dada2::dada(derepRs, err = errR, multithread = TRUE)
 ```
 
-7.
+7. Cette fonction permet d'associer les séquences entre elles sans mismatch (erreur d'association des bases). L'argument verbose permet d'avoir un résumer de la fonction.
 
 
 ```{r}
@@ -283,9 +283,136 @@ mergers <- dada2::mergePairs(
 
 8.
 
+On fabrique une table compilant les séquences associées précedemment.
 
 ```{r}
 seqtab <- dada2::makeSequenceTable(mergers)
 ```
 
+9.
 
+On retire les séquences chimères qui résultent d'un mauvais appariement. Chaque séquence est passée au crible. On a ensuite le résumé.
+
+```{r}
+seqtab_nochim <- dada2::removeBimeraDenovo(seqtab,
+                                           method = "consensus",
+                                           multithread = TRUE,
+                                           verbose = TRUE)
+```
+
+10.
+
+On associe ensuite une appartenance taxonomique à nos séquences. Cela permettra l'interprétation de nos séquences dans l'environnement. Cette appartenance s'effectue en 2 étapes. D'abord, on utilise l'algorithme de Wang et al.
+
+```{r}
+taxonomy <- dada2::assignTaxonomy(
+  seqs = seqtab_nochim,
+  refFasta = silva_train_set,
+  taxLevels = c("Kingdom", "Phylum", "Class",
+                "Order", "Family", "Genus",
+                "Species"),
+  multithread = TRUE,
+  minBoot = 60
+)
+```
+
+Puis on attribue les espèces
+
+```{r}
+taxonomy <- dada2::addSpecies(
+  taxonomy,
+  silva_species_assignment,
+  allowMultiple = FALSE
+)
+```
+
+11.
+
+On exporte les données sous forme d'objets R, un pour la table d'ASV et une autre pour la taxonomie.
+
+```{r}
+export_folder <- here::here("outputs", "dada2", "asv_table")
+
+if (!dir.exists(export_folder)) dir.create(export_folder, recursive = TRUE)
+
+saveRDS(object = seqtab_nochim,
+        file = file.path(export_folder, "seqtab_nochim.rds"))
+
+saveRDS(object = taxonomy,
+        file = file.path(export_folder, "taxonomy.rds"))
+```
+
+12.
+
+On collecte les séquences ASV et on attribue des ID uniques pour chaque séquence, afin que leur nom soit plus court. On renomme les variables.
+
+```{r}
+asv_seq <- colnames(seqtab_nochim)
+ndigits <- nchar(length(asv_seq))
+asv_id <- sprintf(paste0("ASV_%0", ndigits, "d"), seq_along(asv_seq))
+row.names(taxonomy) <- colnames(seqtab_nochim) <- names(asv_seq) <- asv_id
+```
+
+Ces nouvelles identités sont collectées dans une nouvelles colonne asv. 
+
+```{r}
+taxonomy_export <- df_export(taxonomy, new_rn = "asv")
+
+seqtab_nochim_export <- t(seqtab_nochim)
+seqtab_nochim_export <- df_export(seqtab_nochim_export, new_rn = "asv")
+```
+
+On exporte ensuite la taxonomie,
+
+```{r}
+write.table(taxonomy_export,
+            file = file.path(export_folder, "taxonomy.tsv"),
+            quote = FALSE,
+            sep = "\t",
+            row.names = FALSE)
+```
+
+puis la table ASV,
+
+```{r}
+write.table(seqtab_nochim_export,
+            file = file.path(export_folder, "asv_table.tsv"),
+            quote = FALSE,
+            sep = "\t",
+            row.names = FALSE)
+```
+
+et les séquences en format FASTA
+
+```{r}
+cat(paste0(">", names(asv_seq), "\n", asv_seq),
+    sep = "\n",
+    file = file.path(export_folder, "asv.fasta"))
+```
+
+```{r}
+getN <- function(x) sum(dada2::getUniques(x))
+
+log_table <- data.frame(
+  input = primer_log$in_reads,
+  with_fwd_primer = primer_log$`w/adapters`,
+  with_rev_primer = primer_log$`w/adapters2` ,
+  with_both_primers = out[, 1],
+  filtered = out[, 2],
+  denoisedF = sapply(dadaFs, getN),
+  denoisedR = sapply(dadaRs, getN),
+  merged = sapply(mergers, getN),
+  nonchim = rowSums(seqtab_nochim),
+  perc_retained = rowSums(seqtab_nochim) / out[, 1] * 100
+)
+
+rownames(log_table) <- sample_names
+```
+
+```{r}
+df_export(log_table, new_rn = "sample") |>
+  write.table(file = file.path(export_folder, "log_table.tsv"),
+              quote = FALSE,
+              sep = "\t",
+              row.names = FALSE)
+```

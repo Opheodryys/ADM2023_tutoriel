@@ -922,4 +922,3 @@ mm_aldex_table <- data.frame(mm_aldex@marker_table)
 mm_aldex_table
 ```
 
-

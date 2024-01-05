@@ -105,6 +105,32 @@ basename(seqR1) |>
   head()
 ```
 
+On fait la même chose avec les séquences R2.
+
+```{r}
+sample_names <- basename(seqR2) |>
+  strsplit(split = "_") |>
+  sapply(head, 1)
+```
+
+```{r}
+basename(seqR2) |>
+  head()
+```
+
+```{r}
+basename(seqR2) |>
+  strsplit(split = "_") |>
+  head()
+```
+
+```{r}
+basename(seqR2) |>
+  strsplit(split = "_") |>
+  sapply(head, 1) |>
+  head()
+```
+
 On indique à R l'endroit où doivent se trouver les outils.
 
 ```{r, eval=FALSE}
@@ -142,8 +168,8 @@ if (!dir.exists(seq_trimmed)) dir.create(seq_trimmed, recursive = TRUE)
 On attribue à l'amorce directe et reverse leur séquence respective. 
 
 ```{r}
-primer_R1  <- "AGCCTACGGGGGGCACC"
-primer_R2  <- "ACTGATCTCGTTTTTTCTC"
+primer_R1  <- "CCTACGGGNBGCASCAG"
+primer_R2  <- "GACTACNVGGGTATCTAATCC"
 ```
 
 On lit les 10 premières (R1) et 10 dernières (R2) séquences en format fastq.
@@ -395,6 +421,165 @@ df_export(log_table, new_rn = "sample") |>
               row.names = FALSE)
 ```
 
----------------------------------------------------------------------------------------------
 
+
+Maintenant que toutes les séquences sont triées, on peut effectuer l'arbre de distance phylogénétique par la méthode du Neighbor Joining (Figure 2A).Il nous faut un package et une librairie.
+
+```{r}
+library(phangorn)
+```
+
+
+À partir des données de la partie 1, on fait une matrice de distance grâce aux séquences débruitées, déchimérisées et classées dans une table. Ensuite, on fait l'arbre de distance par NJ et on le visualise grâce à un plot.
+
+```{r}
+dist_matrix <- dist(seqtab_nochim, method = "hamming")
+nj_tree <- nj(dist_matrix)
+plot(nj_tree, show.tip.label = FALSE)
+```
+
+
+Ensuite, nous pouvons calculer l'abondance relative et l'alpha diversité (Figure 3A) grâce aux packages vegan et phyloseq.
+
+```{r}
+library(vegan)
+library(phyloseq)
+devtools::load_all(path="/home/rstudio/ADM2023_tutoriel/course-material-main/R")
+```
+
+On crée une matrice puis des tables de séquences et de taxonomie.
+
+```{r}
+seq_finales <- matrix(seqtab_nochim)
+seq_table <- otu_table(as.matrix(seq_finales), taxa_are_rows = FALSE)
+taxa_table <- tax_table(data.frame(Phylum = rep("Bacteria", 5)))
+physeq <- phyloseq(seq_table, taxa_table)
+```
+
+À partir de là, on calcule l'alpha diversité et on l'affiche.
+
+```{r}
+alpha_diversity <- estimate_richness(physeq)
+print(alpha_diversity)
+```
+
+Table d'abondance relative et on l'affiche
+
+```{r}
+abundance_table <- transform_sample_counts(physeq, function(x) x / sum(x))
+print(abundance_table)
+```
+
+Maintenant, on peut tracer un histogramme à l'aide de la librarie ggplot2.
+
+```{r}
+library(ggplot2)
+library(dplyr)
+devtools::load_all(path="/home/rstudio/ADM2023_tutoriel/course-material-main/R")
+```
+
+```{r}
+ggplot(data = alpha_diversity, aes(x = Observed)) +
+  geom_histogram(binwidth = 1, fill = "blue", color = "black", alpha = 0.95) +
+  labs(title = "Histogramme de la diversité alpha",
+       x = "Richesse spécifique (Observed)",
+       y = "Fréquence") +
+  theme_minimal()
+```
+
+On peut tracer les diagrammes en boîtes associés (Figures 3B).
+
+```{r}
+ggplot(alpha_data, aes(x = seqtab_nochim, y = Observed)) +
+  geom_boxplot(fill = "blue", color = "black", alpha = 0.95) +
+  labs(title = "Observed Features",
+       x = "Échantillon",
+       y = "Richesse spécifique (Observed)") +
+  theme_minimal()
+
+ggplot(alpha_data, aes(x = seqtab_nochim, y = Shannon)) +
+  geom_boxplot(fill = "green", color = "black", alpha = 0.95) +
+  labs(title = "Entropie de Shannon",
+       x = "Échantillons",
+       y = "Entropie de Shannon") +
+  theme_minimal()
+
+ggplot(alpha_data, aes(x = seqtab_nochim, y = Faith_PD)) +
+  geom_boxplot(fill = "orange", color = "black", alpha = 0.95) +
+  labs(title = "Faith PD",
+       x = "Échantillons",
+       y = "Diversité phylogénétique (Faith PD)") +
+  theme_minimal()
+```
+
+On peut maintenant réaliser la PCoA de Bray-Curtis et la tracer.
+
+```{r}
+bray_curtis_data <- matrix(seqtab_nochim)
+pcoa_result <- pcoa(vegdist(bray_curtis_data, method = "bray"))
+pcoa_coords <- scores(pcoa_result)
+pcoa_df <- data.frame(Sample = rep(c("Sample1", "Sample2", "Sample3"), each = 100),
+                      PC1 = pcoa_coords[, 1],
+                      PC2 = pcoa_coords[, 2])
+
+
+ggplot(pcoa_df, aes(x = PC1, y = PC2, color = Sample)) +
+  geom_point(size = 3) +
+  labs(title = "PCoA de Bray-Curtis",
+       x = "PCoA1",
+       y = "PCoA2") +
+  theme_minimal()
+```
+
+On peut également faire la même chose avec la PCoA de Unifrac.
+
+```{r}
+otu_table <- matrix(seqtab_nochim)
+sample_data <- data.frame(seqtab_nochim)
+tax_table <- data.frame(Taxon = paste("OTU", 1:100, sep = ""))
+physeq <- phyloseq(otu_table(otu_table, taxa_are_rows = TRUE),
+                   sample_data(sample_data),
+                   tax_table(tax_table))
+
+pcoa_result <- ordinate(physeq, method = "wunifrac")
+pcoa_coords <- scores(pcoa_result)
+pcoa_df <- data.frame(Sample = rep(c(seqtab_nochim), each = 100),
+                      PC1 = pcoa_coords[, 1],
+                      PC2 = pcoa_coords[, 2])
+
+ggplot(pcoa_df, aes(x = PC1, y = PC2, color = Sample)) +
+  geom_point(size = 3) +
+  labs(title = "Weighted Unifrac PCoA",
+       x = "PCoA1",
+       y = "PCoA2") +
+  theme_minimal()
+```
+
+
+Maintenant, nous pouvons créer une heatmap (Figure 6).
+
+```{r}
+ggplot(pcoa_df, aes(x = seqtab_nochim, y = PC1, fill = PC2)) +
+  geom_tile() +
+  scale_fill_gradient(low = "blue", high = "red") +
+  labs(title = "Heatmap de PCoA Weighted Unifrac",
+       x = "Échantillon",
+       y = "PCoA1") +
+  theme_minimal()
+```
+
+Enfin, nous pouvons tracer la matrice de corrélation de Spearman (Figure 7).
+
+```{r}
+cor_matrix <- cor(pcoa_df[, seqtab_nochim], method = "spearman")
+
+ggplot(data = as.data.frame(cor_matrix), aes(x = Var1, y = Var2, fill = cor)) +
+  geom_tile() +
+  scale_fill_gradient2(low = "red", mid = "white", high = "blue", midpoint = 0) +
+  labs(title = "Heatmap de Corrélation de Spearman",
+       x = "Paramètres",
+       y = "Paramètres") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
 
